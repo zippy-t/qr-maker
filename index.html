@@ -1,0 +1,526 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>KH QR Maker</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Work+Sans:wght@400;600;700;800&display=swap" rel="stylesheet">
+
+<style>
+*{box-sizing:border-box}
+
+body{
+  font-family:"Work Sans",system-ui,sans-serif;
+  display:grid;
+  place-items:center;
+  min-height:100vh;
+  background:#f5f7f6;
+  margin:0;
+}
+
+.app{
+  display:grid;
+  grid-template-columns:360px 1fr;
+  gap:34px;
+  align-items:start;
+}
+
+.panel,.preview{
+  background:#fff;
+  padding:28px;
+  border-radius:24px;
+  box-shadow:0 14px 40px rgba(0,0,0,.08);
+}
+
+h2{margin:0 0 20px}
+
+label{
+  display:block;
+  font-size:13px;
+  font-weight:700;
+  margin:16px 0 7px;
+  color:#404042;
+}
+
+input[type="text"],
+input[type="url"],
+input[type="number"]{
+  width:100%;
+  padding:12px 14px;
+  border:1px solid #d6d9dc;
+  border-radius:12px;
+  font-family:inherit;
+  font-size:14px;
+}
+
+.row{
+  display:grid;
+  grid-template-columns:1fr 52px;
+  gap:10px;
+  align-items:center;
+}
+
+input[type="color"]{
+  width:52px;
+  height:44px;
+  border:0;
+  padding:0;
+  background:transparent;
+  cursor:pointer;
+}
+
+.checkbox{
+  display:flex;
+  gap:10px;
+  align-items:center;
+  margin-top:18px;
+  font-weight:700;
+  color:#404042;
+}
+
+button{
+  width:100%;
+  border:none;
+  margin-top:20px;
+  padding:13px 18px;
+  border-radius:12px;
+  background:#00433D;
+  color:white;
+  cursor:pointer;
+  font-weight:800;
+  font-family:inherit;
+  font-size:15px;
+}
+
+button:hover{opacity:.92}
+
+.preview{text-align:center}
+
+canvas{max-width:100%}
+
+@media(max-width:850px){
+  .app{
+    grid-template-columns:1fr;
+    width:min(420px,92vw);
+  }
+}
+</style>
+</head>
+
+<body>
+
+<div class="app">
+
+  <div class="panel">
+    <h2>KH QR Maker</h2>
+
+    <label>URL</label>
+    <input id="urlInput" type="url" value="https://karehero.com">
+
+    <label>QR body color</label>
+    <div class="row">
+      <input id="qrColorText" type="text" value="#00433D">
+      <input id="qrColor" type="color" value="#00433D">
+    </div>
+
+    <label>Finder box color</label>
+    <div class="row">
+      <input id="finderColorText" type="text" value="#EA6430">
+      <input id="finderColor" type="color" value="#EA6430">
+    </div>
+
+    <label>Center circle color</label>
+    <div class="row">
+      <input id="circleColorText" type="text" value="#EA6430">
+      <input id="circleColor" type="color" value="#EA6430">
+    </div>
+
+    <label>Logo color</label>
+    <div class="row">
+      <input id="logoColorText" type="text" value="#FFFFFF">
+      <input id="logoColor" type="color" value="#FFFFFF">
+    </div>
+
+    <label>Frame / label color</label>
+    <div class="row">
+      <input id="frameColorText" type="text" value="#00433D">
+      <input id="frameColor" type="color" value="#00433D">
+    </div>
+
+    <label>Outer border color</label>
+    <div class="row">
+      <input id="borderColorText" type="text" value="#00433D">
+      <input id="borderColor" type="color" value="#00433D">
+    </div>
+
+    <label>Outer border width</label>
+    <input id="borderWidth" type="number" min="0" max="24" value="0">
+
+    <label>Label text</label>
+    <input id="labelText" type="text" value="Scan">
+
+    <div class="checkbox">
+      <input id="withFrame" type="checkbox" checked>
+      <span>Include border and label</span>
+    </div>
+
+    <button onclick="makeQR()">Generate QR</button>
+    <button onclick="downloadSVG()">Download SVG</button>
+  </div>
+
+  <div class="preview">
+    <canvas id="qrCanvas" width="296" height="356"></canvas>
+  </div>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js"></script>
+
+<script>
+const size = 280;
+const quietZone = 18;
+
+const frameW = 296;
+const frameH = 356;
+const framePad = 8;
+const labelY = 292;
+const labelH = 64;
+const labelTextY = 324;
+const radius = 20;
+
+function syncColor(textId,colorId){
+  const text = document.getElementById(textId);
+  const color = document.getElementById(colorId);
+
+  text.addEventListener("input",()=>{
+    if(/^#[0-9A-Fa-f]{6}$/.test(text.value)){
+      color.value = text.value;
+      makeQR();
+    }
+  });
+
+  color.addEventListener("input",()=>{
+    text.value = color.value.toUpperCase();
+    makeQR();
+  });
+}
+
+[
+  ["qrColorText","qrColor"],
+  ["finderColorText","finderColor"],
+  ["circleColorText","circleColor"],
+  ["logoColorText","logoColor"],
+  ["frameColorText","frameColor"],
+  ["borderColorText","borderColor"]
+].forEach(pair=>syncColor(...pair));
+
+["withFrame","labelText","urlInput","borderWidth"].forEach(id=>{
+  document.getElementById(id).addEventListener("input",makeQR);
+  document.getElementById(id).addEventListener("change",makeQR);
+});
+
+function getSettings(){
+  return {
+    text:document.getElementById("urlInput").value.trim() || "https://karehero.com",
+    qrColor:document.getElementById("qrColorText").value,
+    finderColor:document.getElementById("finderColorText").value,
+    circleColor:document.getElementById("circleColorText").value,
+    logoColor:document.getElementById("logoColorText").value,
+    frameColor:document.getElementById("frameColorText").value,
+    borderColor:document.getElementById("borderColorText").value,
+    borderWidth:Number(document.getElementById("borderWidth").value) || 0,
+    label:document.getElementById("labelText").value.trim(),
+    withFrame:document.getElementById("withFrame").checked
+  };
+}
+
+function roundedRectPath(ctx,x,y,w,h,r){
+  ctx.beginPath();
+  ctx.moveTo(x+r,y);
+  ctx.lineTo(x+w-r,y);
+  ctx.quadraticCurveTo(x+w,y,x+w,y+r);
+  ctx.lineTo(x+w,y+h-r);
+  ctx.quadraticCurveTo(x+w,y+h,x+w-r,y+h);
+  ctx.lineTo(x+r,y+h);
+  ctx.quadraticCurveTo(x,y+h,x,y+h-r);
+  ctx.lineTo(x,y+r);
+  ctx.quadraticCurveTo(x,y,x+r,y);
+  ctx.closePath();
+}
+
+function bottomRoundedRectPath(ctx,x,y,w,h,r){
+  ctx.beginPath();
+  ctx.moveTo(x,y);
+  ctx.lineTo(x+w,y);
+  ctx.lineTo(x+w,y+h-r);
+  ctx.quadraticCurveTo(x+w,y+h,x+w-r,y+h);
+  ctx.lineTo(x+r,y+h);
+  ctx.quadraticCurveTo(x,y+h,x,y+h-r);
+  ctx.lineTo(x,y);
+  ctx.closePath();
+}
+
+function inFinder(row,col,modules){
+  return (
+    (row < 7 && col < 7) ||
+    (row < 7 && col > modules - 8) ||
+    (row > modules - 8 && col < 7)
+  );
+}
+
+function overlapsCircle(x,y,w,h,circle){
+  const closestX = Math.max(x,Math.min(circle.x,x + w));
+  const closestY = Math.max(y,Math.min(circle.y,y + h));
+  const dx = circle.x - closestX;
+  const dy = circle.y - closestY;
+  return dx * dx + dy * dy < circle.r * circle.r;
+}
+
+function drawLogo(ctx,centerX,centerY,logoColor){
+  const logoW = 32;
+  const logoH = 28;
+
+  ctx.save();
+  ctx.translate(centerX - logoW / 2,centerY - logoH / 2);
+  ctx.scale(logoW / 17,logoH / 15);
+  ctx.fillStyle = logoColor;
+
+  ctx.fill(new Path2D("M8.5 8C3.81632 8 0 4.40815 0 0H2.08161C2.08161 3.33062 4.96125 6.04082 8.5 6.04082C12.0388 6.04082 14.9184 3.33062 14.9184 0H17C17 4.40815 13.1837 8 8.5 8Z"));
+  ctx.fill(new Path2D("M17 10H0V12H17V10Z"));
+  ctx.fill(new Path2D("M17 13H0V15H17V13Z"));
+
+  ctx.restore();
+}
+
+function drawFinderCanvas(ctx,x,y,moduleSize,finderColor){
+  ctx.fillStyle = finderColor;
+  ctx.fillRect(x,y,7 * moduleSize,7 * moduleSize);
+
+  ctx.fillStyle = "#FFFFFF";
+  ctx.fillRect(x + moduleSize,y + moduleSize,5 * moduleSize,5 * moduleSize);
+
+  ctx.fillStyle = finderColor;
+  ctx.fillRect(x + 2 * moduleSize,y + 2 * moduleSize,3 * moduleSize,3 * moduleSize);
+}
+
+function makeQR(){
+  const s = getSettings();
+
+  const canvas = document.getElementById("qrCanvas");
+  const ctx = canvas.getContext("2d");
+
+  const canvasW = s.withFrame ? frameW : size;
+  const canvasH = s.withFrame ? frameH : size;
+
+  canvas.width = canvasW;
+  canvas.height = canvasH;
+
+  ctx.clearRect(0,0,canvasW,canvasH);
+
+  const offsetX = s.withFrame ? framePad : 0;
+  const offsetY = s.withFrame ? framePad : 0;
+  const centerX = offsetX + size / 2;
+  const centerY = offsetY + size / 2;
+
+  if(s.withFrame){
+    roundedRectPath(ctx,0,0,canvasW,canvasH,radius);
+    ctx.fillStyle = "#FFFFFF";
+    ctx.fill();
+
+    bottomRoundedRectPath(ctx,0,labelY,canvasW,labelH,radius);
+    ctx.fillStyle = s.frameColor;
+    ctx.fill();
+
+    if(s.borderWidth > 0){
+      ctx.lineWidth = s.borderWidth;
+      ctx.strokeStyle = s.borderColor;
+      roundedRectPath(
+        ctx,
+        s.borderWidth / 2,
+        s.borderWidth / 2,
+        canvasW - s.borderWidth,
+        canvasH - s.borderWidth,
+        radius
+      );
+      ctx.stroke();
+    }
+
+    ctx.fillStyle = "#FFFFFF";
+    ctx.font = "400 25px 'Work Sans', sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(s.label || "Scan me",canvasW / 2,labelTextY);
+  }else{
+    ctx.fillStyle = "#FFFFFF";
+    ctx.fillRect(0,0,canvasW,canvasH);
+  }
+
+  ctx.fillStyle = "#FFFFFF";
+  ctx.fillRect(offsetX,offsetY,size,size);
+
+  const qr = qrcode(0,"H");
+  qr.addData(s.text);
+  qr.make();
+
+  const modules = qr.getModuleCount();
+  const moduleSize = (size - quietZone * 2) / modules;
+
+  const logoCircle = {
+    x:centerX,
+    y:centerY,
+    r:24
+  };
+
+  ctx.fillStyle = s.qrColor;
+
+  for(let row = 0; row < modules; row++){
+    for(let col = 0; col < modules; col++){
+      if(!qr.isDark(row,col)) continue;
+      if(inFinder(row,col,modules)) continue;
+
+      const x = offsetX + quietZone + col * moduleSize;
+      const y = offsetY + quietZone + row * moduleSize;
+
+      if(overlapsCircle(x,y,moduleSize,moduleSize,logoCircle)) continue;
+
+      ctx.fillRect(x,y,moduleSize,moduleSize);
+    }
+  }
+
+  drawFinderCanvas(ctx,offsetX + quietZone,offsetY + quietZone,moduleSize,s.finderColor);
+  drawFinderCanvas(ctx,offsetX + quietZone + (modules - 7) * moduleSize,offsetY + quietZone,moduleSize,s.finderColor);
+  drawFinderCanvas(ctx,offsetX + quietZone,offsetY + quietZone + (modules - 7) * moduleSize,moduleSize,s.finderColor);
+
+  ctx.beginPath();
+  ctx.arc(centerX,centerY,logoCircle.r,0,Math.PI * 2);
+  ctx.fillStyle = s.circleColor;
+  ctx.fill();
+
+  drawLogo(ctx,centerX,centerY,s.logoColor);
+}
+
+function downloadSVG(){
+  const s = getSettings();
+
+  const svgW = s.withFrame ? frameW : size;
+  const svgH = s.withFrame ? frameH : size;
+  const offsetX = s.withFrame ? framePad : 0;
+  const offsetY = s.withFrame ? framePad : 0;
+  const centerX = offsetX + size / 2;
+  const centerY = offsetY + size / 2;
+
+  const qr = qrcode(0,"H");
+  qr.addData(s.text);
+  qr.make();
+
+  const modules = qr.getModuleCount();
+  const moduleSize = (size - quietZone * 2) / modules;
+
+  const logoCircle = {
+    x:centerX,
+    y:centerY,
+    r:24
+  };
+
+  function finderSvg(x,y){
+    return `
+<rect x="${x}" y="${y}" width="${7 * moduleSize}" height="${7 * moduleSize}" fill="${s.finderColor}"/>
+<rect x="${x + moduleSize}" y="${y + moduleSize}" width="${5 * moduleSize}" height="${5 * moduleSize}" fill="#FFFFFF"/>
+<rect x="${x + 2 * moduleSize}" y="${y + 2 * moduleSize}" width="${3 * moduleSize}" height="${3 * moduleSize}" fill="${s.finderColor}"/>
+`;
+  }
+
+  let svg = `
+<svg xmlns="http://www.w3.org/2000/svg" width="${svgW}" height="${svgH}" viewBox="0 0 ${svgW} ${svgH}">
+<style>
+.text{font-family:'Work Sans',Arial,sans-serif;font-weight:800;}
+</style>
+`;
+
+  if(s.withFrame){
+    svg += `
+<rect width="${svgW}" height="${svgH}" rx="${radius}" fill="#FFFFFF"/>
+<path d="
+M 0 ${labelY}
+H ${svgW}
+V ${svgH - radius}
+Q ${svgW} ${svgH} ${svgW - radius} ${svgH}
+H ${radius}
+Q 0 ${svgH} 0 ${svgH - radius}
+V ${labelY}
+Z" fill="${s.frameColor}"/>
+`;
+
+    if(s.borderWidth > 0){
+      svg += `
+<rect x="${s.borderWidth / 2}" y="${s.borderWidth / 2}" width="${svgW - s.borderWidth}" height="${svgH - s.borderWidth}" rx="${radius}" fill="none" stroke="${s.borderColor}" stroke-width="${s.borderWidth}"/>
+`;
+    }
+
+    svg += `
+<text class="text" x="${svgW / 2}" y="${labelTextY}" text-anchor="middle" dominant-baseline="middle" font-size="25" fill="#FFFFFF">${escapeXML(s.label || "Scan me")}</text>
+`;
+  }else{
+    svg += `<rect width="${svgW}" height="${svgH}" fill="#FFFFFF"/>`;
+  }
+
+  svg += `<rect x="${offsetX}" y="${offsetY}" width="${size}" height="${size}" fill="#FFFFFF"/>`;
+
+  for(let row = 0; row < modules; row++){
+    for(let col = 0; col < modules; col++){
+      if(!qr.isDark(row,col)) continue;
+      if(inFinder(row,col,modules)) continue;
+
+      const x = offsetX + quietZone + col * moduleSize;
+      const y = offsetY + quietZone + row * moduleSize;
+
+      if(overlapsCircle(x,y,moduleSize,moduleSize,logoCircle)) continue;
+
+      svg += `<rect x="${x}" y="${y}" width="${moduleSize}" height="${moduleSize}" fill="${s.qrColor}"/>`;
+    }
+  }
+
+  svg += finderSvg(offsetX + quietZone,offsetY + quietZone);
+  svg += finderSvg(offsetX + quietZone + (modules - 7) * moduleSize,offsetY + quietZone);
+  svg += finderSvg(offsetX + quietZone,offsetY + quietZone + (modules - 7) * moduleSize);
+
+  svg += `
+<circle cx="${centerX}" cy="${centerY}" r="${logoCircle.r}" fill="${s.circleColor}"/>
+<g transform="translate(${centerX - 16} ${centerY - 14}) scale(${32 / 17} ${28 / 15})" fill="${s.logoColor}">
+<path d="M8.5 8C3.81632 8 0 4.40815 0 0H2.08161C2.08161 3.33062 4.96125 6.04082 8.5 6.04082C12.0388 6.04082 14.9184 3.33062 14.9184 0H17C17 4.40815 13.1837 8 8.5 8Z"/>
+<path d="M17 10H0V12H17V10Z"/>
+<path d="M17 13H0V15H17V13Z"/>
+</g>
+</svg>`;
+
+  const blob = new Blob([svg],{type:"image/svg+xml;charset=utf-8"});
+  const url = URL.createObjectURL(blob);
+
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "KareHero-QR.svg";
+  a.click();
+
+  URL.revokeObjectURL(url);
+}
+
+function escapeXML(str){
+  return str.replace(/[<>&'"]/g,function(c){
+    return {
+      "<":"&lt;",
+      ">":"&gt;",
+      "&":"&amp;",
+      "'":"&apos;",
+      '"':"&quot;"
+    }[c];
+  });
+}
+
+makeQR();
+</script>
+
+</body>
+</html>
